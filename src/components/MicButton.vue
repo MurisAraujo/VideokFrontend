@@ -32,6 +32,8 @@ export default {
 
 <style>
   #micBtn{
+    width: 50px;
+    height: 50px;
     padding: 13px;
     border-radius: 100%;
     z-index: 2;

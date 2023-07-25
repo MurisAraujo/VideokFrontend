@@ -6,25 +6,22 @@
         <div class="videoAndDevices">
           <div class="containerCamera">
             <div class="camera" id="camera">
-              <div v-show="isCameraOpen && isLoading" class="camera-loading">
+              <div v-show="this.camStatus && isLoading" class="camera-loading">
                 <p>Carregando Câmera</p>
               </div>
-              <video v-if="isCameraOpen" ref="camera" autoplay></video>
-              <div v-if="!isCameraOpen" class="cameraOff">
+              <video v-if="this.camStatus" ref="camera" autoplay></video>
+              <div v-if="!this.camStatus" class="cameraOff">
                 <b-icon icon="camera-video-off-fill" font-scale="4"></b-icon>
                 <span>Câmera desligada</span>
               </div>
-              <camera-button
-                :cameraopen="isCameraOpen"
-                :callback="toggleCamera"
-              />
+              <camera-button :callback="toggleCamera"/>
               <mic-button />
             </div>
           </div>
           
           <div class="devices">
-            <device-select :devices="this.camera" titulo="Câmeras" />
-            <device-select :devices="this.audios" titulo="Microfones"/>
+            <device-select :devices="this.camDevices" :callback="openCamera" tipo="cam" titulo="Câmeras" />
+            <device-select :devices="this.micDevices" tipo="mic" titulo="Microfones"/>
           </div>
         </div>
         <div class="actions">
@@ -35,7 +32,9 @@
             <h3>Olá <b>Murilo Amurim</b>,</h3>
             <h4>Pronto para participar?</h4>
             <div class="buttons">
-              <b-button pill variant="primary"> Participar agora </b-button>
+              <router-link to="/call">
+                <b-button pill variant="primary"> Participar agora </b-button>
+              </router-link>
             </div>
           </div>
         </div>
@@ -45,6 +44,8 @@
 </template>
 
 <script>
+import { mapState, mapMutations } from "vuex";
+import { RouterLink } from 'vue-router'
 import CameraButton from "@/components/CameraButton.vue";
 import HeaderComponent from "../components/Header.vue";
 import MicButton from "@/components/MicButton.vue";
@@ -57,53 +58,55 @@ export default {
     CameraButton,
     MicButton,
     DeviceSelect,
+    RouterLink
   },
   data() {
     return {
       mku: true,
-      isCameraOpen: false,
       isLoading: false,
       camera: [],
-      audios: []
+      audios: [],
+      video: document.querySelector('video')
     };
   },
   methods: {
+    ...mapMutations([
+      'setCam',
+      'setCamDevices',
+      'setCamStatus',
+      'setMic',
+      'setMicDevices',
+      'setMicStatus'
+    ]),
+
     toggleCamera() {
-      console.log("teste");
-      if (this.isCameraOpen) {
-        this.isCameraOpen = false;
+      console.log('entrei aqui')
+      if (this.camStatus) {
         this.stopCameraStream();
+        this.setCamStatus();
       } else {
-        this.isCameraOpen = true;
-        this.createCameraElement();
+        this.openCamera(this.camActivated);
+        this.setCamStatus();
       }
     },
 
-    createCameraElement() {
+    openCamera(cameraId){
       this.isLoading = true;
+      const constraints = {
+        'audio': {'echoCancellation': true},
+        'video': {
+          'deviceId': cameraId
+        }
+      }
+      navigator.mediaDevices.getUserMedia(constraints).then((stream) => {
+        this.isLoading = false;
+        // console.log(stream)
+        this.$refs.camera.srcObject = stream;
 
-      const constraints = (window.constraints = {
-        audio: false,
-        video: true,
-      });
-
-      console.log(navigator.mediaDevices
-        .getUserMedia(constraints))
-
-      navigator.mediaDevices
-        .getUserMedia(constraints)
-        .then((stream) => {
-          this.isLoading = false;
-          this.$refs.camera.srcObject = stream;
-          console.log(stream, constraints, navigator.mediaDevices);
-        })
-        .catch((error) => {
-          this.isLoading = false;
-          alert(
-            "May the browser didn't support or there is some errors.",
-            error
-          );
-        });
+      }).catch((error) => {
+        this.isLoading = false;
+        console.log(error, "Não foi possivel iniciar a câmera.")
+      })
     },
 
     stopCameraStream() {
@@ -119,25 +122,42 @@ export default {
         && navigator.mediaDevices.enumerateDevices()
         .then((devices) => {
             devices.forEach((device) => {
-            if (device.kind === 'audioinput') {
-                this.audios.push(device);
-            }
+              if (device.kind === 'audioinput') {
+                this.setMicDevices(device);
+              }
 
-            if (device.kind === 'videoinput') {
-                this.camera.push(device);
-            }
+              if (device.kind === 'videoinput') {
+                this.setCamDevices(device);
+              }
             });
         })
         .catch((err) => {
             console.error(`${err.name}: ${err.message}`);
         }).finally(() => {
-            console.log(this.audios);
-            console.log(this.camera);
+            if(this.camDevices.length > 0){
+              this.setCam(this.camDevices[0])
+              this.openCamera(this.camActivated)
+              this.setCamStatus()
+            }
+            if(this.micDevices.length > 0){
+              this.setMic(this.micDevices[0])
+              this.setMicStatus()
+            }
         })
     }
   },
   mounted() {
-    this.listDevices()
+    this.listDevices();
+  },
+  computed:{
+    ...mapState({
+      camStatus: state => state.cam.cam_status,
+      camActivated: state => state.cam.cam_actived,
+      camDevices: state => state.cam.cam_devices,
+      micStatus: state => state.mic.mic_status,
+      micActivated: state => state.mic.mic_actived,
+      micDevices: state => state.mic.mic_devices
+    })
   }
 };
 </script>
